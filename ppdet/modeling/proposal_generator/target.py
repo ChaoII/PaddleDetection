@@ -74,9 +74,11 @@ def label_box(anchors,
               is_crowd=None,
               assign_on_cpu=False):
     if assign_on_cpu:
+        device = paddle.device.get_device()
         paddle.set_device("cpu")
         iou = bbox_overlaps(gt_boxes, anchors)
-        paddle.set_device("gpu")
+        paddle.set_device(device)
+
     else:
         iou = bbox_overlaps(gt_boxes, anchors)
     n_gt = gt_boxes.shape[0]
@@ -184,7 +186,8 @@ def generate_proposal_target(rpn_rois,
                              use_random=True,
                              is_cascade=False,
                              cascade_iou=0.5,
-                             assign_on_cpu=False):
+                             assign_on_cpu=False,
+                             add_gt_as_proposals=True):
 
     rois_with_gt = []
     tgt_labels = []
@@ -202,7 +205,7 @@ def generate_proposal_target(rpn_rois,
         gt_class = paddle.squeeze(gt_classes[i], axis=-1)
 
         # Concat RoIs and gt boxes except cascade rcnn or none gt
-        if not is_cascade and gt_bbox.shape[0] > 0:
+        if add_gt_as_proposals and gt_bbox.shape[0] > 0:
             bbox = paddle.concat([rpn_roi, gt_bbox])
         else:
             bbox = rpn_roi
@@ -292,7 +295,7 @@ def polygons_to_mask(polygons, height, width):
     assert len(polygons) > 0, "COCOAPI does not support empty polygons"
     rles = mask_util.frPyObjects(polygons, height, width)
     rle = mask_util.merge(rles)
-    return mask_util.decode(rle).astype(np.bool)
+    return mask_util.decode(rle).astype(np.bool_)
 
 
 def rasterize_polygons_within_box(poly, box, resolution):
@@ -337,7 +340,7 @@ def generate_mask_target(gt_segms, rois, labels_int32, sampled_gt_inds,
         # generate fake roi if foreground is empty
         if fg_inds.numel() == 0:
             has_fg = False
-            fg_inds = paddle.ones([1], dtype='int32')
+            fg_inds = paddle.ones([1, 1], dtype='int64')
         inds_per_im = sampled_gt_inds[k]
         inds_per_im = paddle.gather(inds_per_im, fg_inds)
 
@@ -356,7 +359,7 @@ def generate_mask_target(gt_segms, rois, labels_int32, sampled_gt_inds,
         fg_inds_new = fg_inds.reshape([-1]).numpy()
         results = []
         if len(gt_segms_per_im) > 0:
-            for j in fg_inds_new:
+            for j in range(fg_inds_new.shape[0]):
                 results.append(
                     rasterize_polygons_within_box(new_segm[j], boxes[j],
                                                   resolution))
@@ -445,7 +448,7 @@ def libra_sample_via_interval(max_overlaps, full_set, num_expected, floor_thr,
             tmp_sampled_set = np.random.choice(
                 tmp_inds, size=per_num_expected, replace=False)
         else:
-            tmp_sampled_set = np.array(tmp_inds, dtype=np.int)
+            tmp_sampled_set = np.array(tmp_inds, dtype=np.int32)
         sampled_inds.append(tmp_sampled_set)
 
     sampled_inds = np.concatenate(sampled_inds)
@@ -506,13 +509,13 @@ def libra_sample_neg(max_overlaps,
                     size=num_expected_iou_sampling,
                     replace=False)
         else:
-            iou_sampled_inds = np.array(iou_sampling_neg_inds, dtype=np.int)
+            iou_sampled_inds = np.array(iou_sampling_neg_inds, dtype=np.int32)
         num_expected_floor = num_expected - len(iou_sampled_inds)
         if len(floor_neg_inds) > num_expected_floor:
             sampled_floor_inds = np.random.choice(
                 floor_neg_inds, size=num_expected_floor, replace=False)
         else:
-            sampled_floor_inds = np.array(floor_neg_inds, dtype=np.int)
+            sampled_floor_inds = np.array(floor_neg_inds, dtype=np.int32)
         sampled_inds = np.concatenate((sampled_floor_inds, iou_sampled_inds))
         if len(sampled_inds) < num_expected:
             num_extra = num_expected - len(sampled_inds)

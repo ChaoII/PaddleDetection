@@ -21,18 +21,21 @@ import copy
 import sys
 import math
 from collections import defaultdict
-from motmetrics.math_util import quiet_divide
 
 import numpy as np
 import pandas as pd
 
-import paddle
-import paddle.nn.functional as F
 from .metrics import Metric
-import motmetrics as mm
-import openpyxl
-metrics = mm.metrics.motchallenge_metrics
-mh = mm.metrics.create()
+try:
+    import motmetrics as mm
+    from motmetrics.math_util import quiet_divide
+    metrics = mm.metrics.motchallenge_metrics
+    mh = mm.metrics.create()
+except:
+    print(
+        'Warning: Unable to use MCMOT metric, please install motmetrics, for example: `pip install motmetrics`, see https://github.com/longcw/py-motmetrics'
+    )
+    pass
 from ppdet.utils.logger import setup_logger
 logger = setup_logger(__name__)
 
@@ -302,24 +305,30 @@ class MCMOTEvaluator(object):
         self.num_classes = num_classes
 
         self.load_annotations()
+        try:
+            import motmetrics as mm
+            mm.lap.default_solver = 'lap'
+        except Exception as e:
+            raise RuntimeError(
+                'Unable to use MCMOT metric, please install motmetrics, for example: `pip install motmetrics`, see https://github.com/longcw/py-motmetrics'
+            )
         self.reset_accumulator()
 
         self.class_accs = []
 
     def load_annotations(self):
         assert self.data_type == 'mcmot'
-        self.gt_filename = os.path.join(self.data_root, '../',
-                                        'sequences',
+        self.gt_filename = os.path.join(self.data_root, '../', 'sequences',
                                         '{}.txt'.format(self.seq_name))
-        
+        if not os.path.exists(self.gt_filename):
+            logger.warning(
+                "gt_filename '{}' of MCMOTEvaluator is not exist, so the MOTA will be -INF."
+            )
+
     def reset_accumulator(self):
-        import motmetrics as mm
-        mm.lap.default_solver = 'lap'
         self.acc = mm.MOTAccumulator(auto_id=True)
 
     def eval_frame_dict(self, trk_objs, gt_objs, rtn_events=False, union=False):
-        import motmetrics as mm
-        mm.lap.default_solver = 'lap'
         if union:
             trk_tlwhs, trk_ids, trk_cls = unzip_objs_cls(trk_objs)[:3]
             gt_tlwhs, gt_ids, gt_cls = unzip_objs_cls(gt_objs)[:3]
@@ -393,9 +402,6 @@ class MCMOTEvaluator(object):
                     names,
                     metrics=('mota', 'num_switches', 'idp', 'idr', 'idf1',
                              'precision', 'recall')):
-        import motmetrics as mm
-        mm.lap.default_solver = 'lap'
-
         names = copy.deepcopy(names)
         if metrics is None:
             metrics = mm.metrics.motchallenge_metrics

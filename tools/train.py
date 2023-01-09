@@ -30,17 +30,20 @@ warnings.filterwarnings('ignore')
 import paddle
 
 from ppdet.core.workspace import load_config, merge_config
-from ppdet.engine import Trainer, init_parallel_env, set_random_seed, init_fleet_env
+
+from ppdet.engine import Trainer, TrainerCot, init_parallel_env, set_random_seed, init_fleet_env
+from ppdet.engine.trainer_ssod import Trainer_DenseTeacher
+
 from ppdet.slim import build_slim_model
 
-import ppdet.utils.cli as cli
+from ppdet.utils.cli import ArgsParser, merge_args
 import ppdet.utils.check as check
 from ppdet.utils.logger import setup_logger
 logger = setup_logger('train')
 
 
 def parse_args():
-    parser = cli.ArgsParser()
+    parser = ArgsParser()
     parser.add_argument(
         "--eval",
         action='store_true',
@@ -77,6 +80,11 @@ def parse_args():
         default="vdl_log_dir/scalar",
         help='VisualDL logging directory for scalar.')
     parser.add_argument(
+        "--use_wandb",
+        type=bool,
+        default=False,
+        help="whether to record the data to wandb.")
+    parser.add_argument(
         '--save_prediction_only',
         action='store_true',
         default=False,
@@ -98,6 +106,11 @@ def parse_args():
         type=str,
         default="sniper/proposals.json",
         help='Train proposals directory')
+    parser.add_argument(
+        "--to_static",
+        action='store_true',
+        default=False,
+        help="Enable dy2st to train.")
 
     args = parser.parse_args()
     return args
@@ -115,7 +128,18 @@ def run(FLAGS, cfg):
         set_random_seed(0)
 
     # build trainer
-    trainer = Trainer(cfg, mode='train')
+    ssod_method = cfg.get('ssod_method', None)
+    if ssod_method is not None:
+        if ssod_method == 'DenseTeacher':
+            trainer = Trainer_DenseTeacher(cfg, mode='train')
+        else:
+            raise ValueError(
+                "Semi-Supervised Object Detection only support DenseTeacher now."
+            )
+    elif cfg.get('use_cot', False):
+        trainer = TrainerCot(cfg, mode='train')
+    else:
+        trainer = Trainer(cfg, mode='train')
 
     # load weights
     if FLAGS.resume is not None:
@@ -130,14 +154,7 @@ def run(FLAGS, cfg):
 def main():
     FLAGS = parse_args()
     cfg = load_config(FLAGS.config)
-    cfg['amp'] = FLAGS.amp
-    cfg['fleet'] = FLAGS.fleet
-    cfg['use_vdl'] = FLAGS.use_vdl
-    cfg['vdl_log_dir'] = FLAGS.vdl_log_dir
-    cfg['save_prediction_only'] = FLAGS.save_prediction_only
-    cfg['profiler_options'] = FLAGS.profiler_options
-    cfg['save_proposals'] = FLAGS.save_proposals
-    cfg['proposals_path'] = FLAGS.proposals_path
+    merge_args(cfg, FLAGS)
     merge_config(FLAGS.opt)
 
     # disable npu in config by default
@@ -148,17 +165,23 @@ def main():
     if 'use_xpu' not in cfg:
         cfg.use_xpu = False
 
+    if 'use_gpu' not in cfg:
+        cfg.use_gpu = False
+
+    # disable mlu in config by default
+    if 'use_mlu' not in cfg:
+        cfg.use_mlu = False
+
     if cfg.use_gpu:
         place = paddle.set_device('gpu')
     elif cfg.use_npu:
         place = paddle.set_device('npu')
     elif cfg.use_xpu:
         place = paddle.set_device('xpu')
+    elif cfg.use_mlu:
+        place = paddle.set_device('mlu')
     else:
         place = paddle.set_device('cpu')
-
-    if 'norm_type' in cfg and cfg['norm_type'] == 'sync_bn' and not cfg.use_gpu:
-        cfg['norm_type'] = 'bn'
 
     if FLAGS.slim_config:
         cfg = build_slim_model(cfg, FLAGS.slim_config)
@@ -168,6 +191,8 @@ def main():
     check.check_config(cfg)
     check.check_gpu(cfg.use_gpu)
     check.check_npu(cfg.use_npu)
+    check.check_xpu(cfg.use_xpu)
+    check.check_mlu(cfg.use_mlu)
     check.check_version()
 
     run(FLAGS, cfg)

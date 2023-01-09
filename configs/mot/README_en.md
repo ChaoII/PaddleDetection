@@ -40,7 +40,7 @@ PP-Tracking supports GUI predict and deployment. Please refer to this [doc](http
 </div>
 
 <div width="1000" align="center">
-  <img src="../../docs/images/pptracking-demo.gif"/>
+  <img src="https://user-images.githubusercontent.com/22989727/205546999-f847183d-73e5-4abe-9896-ce6a245efc79.gif"/>
   <br>
   video source：VisDrone, BDD100K dataset</div>
 </div>
@@ -49,21 +49,22 @@ PP-Tracking supports GUI predict and deployment. Please refer to this [doc](http
 ## Installation
 Install all the related dependencies for MOT:
 ```
-pip install lap sklearn motmetrics openpyxl cython_bbox
+pip install lap motmetrics sklearn filterpy
 or
 pip install -r requirements.txt
 ```
 **Notes:**
-- Install `cython_bbox` for Windows: `pip install -e git+https://github.com/samson-wang/cython_bbox.git#egg=cython-bbox`. You can refer to this [tutorial](https://stackoverflow.com/questions/60349980/is-there-a-way-to-install-cython-bbox-for-windows).
 - Please make sure that [ffmpeg](https://ffmpeg.org/ffmpeg.html) is installed first, on Linux(Ubuntu) platform you can directly install it by the following command:`apt-get update && apt-get install -y ffmpeg`.
 
 
 ## Model Zoo
 - Base models
     - [ByteTrack](bytetrack/README.md)
+    - [OC-SORT](ocsort/README.md)
     - [DeepSORT](deepsort/README.md)
     - [JDE](jde/README.md)
     - [FairMOT](fairmot/README.md)
+    - [CenterTrack](centertrack/README.md)
 - Feature models
     - [Pedestrian](pedestrian/README.md)
     - [Head](headtracking21/README.md)
@@ -80,25 +81,25 @@ PaddleDetection implement [JDE](https://github.com/Zhongdao/Towards-Realtime-MOT
 
 **Notes:**
 - Multi-Object Tracking(MOT) datasets are always used for single category tracking. DeepSORT, JDE and FairMOT are single category MOT models. 'MIX' dataset and it's sub datasets are also single category pedestrian tracking datasets. It can be considered that there are additional IDs ground truth for detection datasets.
-- In order to train the feature models of more scenes, more datasets are also processed into the same format as the MIX dataset. PaddleDetection Team also provides feature datasets and models of [vehicle tracking](vehicle/readme.md), [head tracking](headtracking21/readme.md) and more general [pedestrian tracking](pedestrian/readme.md). User defined datasets can also be prepared by referring to data preparation [doc](../../docs/tutorials/PrepareMOTDataSet.md).
+- In order to train the feature models of more scenes, more datasets are also processed into the same format as the MIX dataset. PaddleDetection Team also provides feature datasets and models of [vehicle tracking](vehicle/README.md), [head tracking](headtracking21/README.md) and more general [pedestrian tracking](pedestrian/README.md). User defined datasets can also be prepared by referring to data preparation [doc](../../docs/tutorials/data/PrepareMOTDataSet.md).
 - The multipe category MOT model is [MCFairMOT] (mcfairmot/readme_cn.md), and the multi category dataset is the integrated version of VisDrone dataset. Please refer to the doc of [MCFairMOT](mcfairmot/README.md).
 - The Multi-Target Multi-Camera Tracking (MTMCT) model is [AIC21 MTMCT](https://www.aicitychallenge.org)(CityFlow) Multi-Camera Vehicle Tracking dataset. The dataset and model can refer to the doc of [MTMCT](mtmct/README.md)
 
 ### Dataset Directory
 First, download the image_lists.zip using the following command, and unzip them into `PaddleDetection/dataset/mot`:
 ```
-wget https://dataset.bj.bcebos.com/mot/image_lists.zip
+wget https://bj.bcebos.com/v1/paddledet/data/mot/image_lists.zip
 ```
 
 Then, download the MIX dataset using the following command, and unzip them into `PaddleDetection/dataset/mot`:
 ```
-wget https://dataset.bj.bcebos.com/mot/MOT17.zip
-wget https://dataset.bj.bcebos.com/mot/Caltech.zip
-wget https://dataset.bj.bcebos.com/mot/CUHKSYSU.zip
-wget https://dataset.bj.bcebos.com/mot/PRW.zip
-wget https://dataset.bj.bcebos.com/mot/Cityscapes.zip
-wget https://dataset.bj.bcebos.com/mot/ETHZ.zip
-wget https://dataset.bj.bcebos.com/mot/MOT16.zip
+wget https://bj.bcebos.com/v1/paddledet/data/mot/MOT17.zip
+wget https://bj.bcebos.com/v1/paddledet/data/mot/Caltech.zip
+wget https://bj.bcebos.com/v1/paddledet/data/mot/CUHKSYSU.zip
+wget https://bj.bcebos.com/v1/paddledet/data/mot/PRW.zip
+wget https://bj.bcebos.com/v1/paddledet/data/mot/Cityscapes.zip
+wget https://bj.bcebos.com/v1/paddledet/data/mot/ETHZ.zip
+wget https://bj.bcebos.com/v1/paddledet/data/mot/MOT16.zip
 ```
 
 The final directory is:
@@ -182,6 +183,27 @@ In the annotation text, each line is describing a bounding box and has the follo
   title={FairMOT: On the Fairness of Detection and Re-Identification in Multiple Object Tracking},
   author={Zhang, Yifu and Wang, Chunyu and Wang, Xinggang and Zeng, Wenjun and Liu, Wenyu},
   journal={arXiv preprint arXiv:2004.01888},
+  year={2020}
+}
+
+@article{zhang2021bytetrack,
+  title={ByteTrack: Multi-Object Tracking by Associating Every Detection Box},
+  author={Zhang, Yifu and Sun, Peize and Jiang, Yi and Yu, Dongdong and Yuan, Zehuan and Luo, Ping and Liu, Wenyu and Wang, Xinggang},
+  journal={arXiv preprint arXiv:2110.06864},
+  year={2021}
+}
+
+@article{cao2022observation,
+  title={Observation-Centric SORT: Rethinking SORT for Robust Multi-Object Tracking},
+  author={Cao, Jinkun and Weng, Xinshuo and Khirodkar, Rawal and Pang, Jiangmiao and Kitani, Kris},
+  journal={arXiv preprint arXiv:2203.14360},
+  year={2022}
+}
+
+@article{zhou2020tracking,
+  title={Tracking Objects as Points},
+  author={Zhou, Xingyi and Koltun, Vladlen and Kr{\"a}henb{\"u}hl, Philipp},
+  journal={ECCV},
   year={2020}
 }
 ```

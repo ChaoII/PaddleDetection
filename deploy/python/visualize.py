@@ -96,6 +96,8 @@ def draw_mask(im, np_boxes, np_masks, labels, threshold=0.5):
     expect_boxes = (np_boxes[:, 1] > threshold) & (np_boxes[:, 0] > -1)
     np_boxes = np_boxes[expect_boxes, :]
     np_masks = np_masks[expect_boxes, :, :]
+    im_h, im_w = im.shape[:2]
+    np_masks = np_masks[:, :im_h, :im_w]
     for i in range(len(np_masks)):
         clsid, score = int(np_boxes[i][0]), np_boxes[i][1]
         mask = np_masks[i]
@@ -235,8 +237,8 @@ def visualize_pose(imgfile,
         import matplotlib
         plt.switch_backend('agg')
     except Exception as e:
-        logger.error('Matplotlib not found, please install matplotlib.'
-                     'for example: `pip install matplotlib`.')
+        print('Matplotlib not found, please install matplotlib.'
+              'for example: `pip install matplotlib`.')
         raise e
     skeletons, scores = results['keypoint']
     skeletons = np.array(skeletons)
@@ -329,7 +331,7 @@ def visualize_pose(imgfile,
     plt.close()
 
 
-def visualize_attr(im, results, boxes=None):
+def visualize_attr(im, results, boxes=None, is_mtmct=False):
     if isinstance(im, str):
         im = Image.open(im)
         im = np.ascontiguousarray(np.copy(im))
@@ -346,8 +348,12 @@ def visualize_attr(im, results, boxes=None):
         if boxes is None:
             text_w = 3
             text_h = 1
+        elif is_mtmct:
+            box = boxes[i]  # multi camera, bbox shape is x,y, w,h
+            text_w = int(box[0]) + 3
+            text_h = int(box[1])
         else:
-            box = boxes[i]
+            box = boxes[i]  # single camera, bbox shape is 0, 0, x,y, w,h
             text_w = int(box[2]) + 3
             text_h = int(box[3])
         for text in res:
@@ -363,15 +369,211 @@ def visualize_attr(im, results, boxes=None):
     return im
 
 
-def visualize_action(im, mot_boxes, action_visual_collector, action_text=""):
+def visualize_action(im,
+                     mot_boxes,
+                     action_visual_collector=None,
+                     action_text="",
+                     video_action_score=None,
+                     video_action_text=""):
     im = cv2.imread(im) if isinstance(im, str) else im
-    id_detected = action_visual_collector.get_visualize_ids()
-    text_scale = max(1, im.shape[1] / 1600.)
-    for mot_box in mot_boxes:
-        # mot_box is a format with [mot_id, class, score, xmin, ymin, w, h] 
-        if mot_box[0] in id_detected:
-            text_position = (int(mot_box[3] + mot_box[5] * 0.75),
-                             int(mot_box[4] - 10))
-            cv2.putText(im, action_text, text_position, cv2.FONT_HERSHEY_PLAIN,
-                        text_scale, (0, 0, 255), 2)
+    im_h, im_w = im.shape[:2]
+
+    text_scale = max(1, im.shape[1] / 400.)
+    text_thickness = 2
+
+    if action_visual_collector:
+        id_action_dict = {}
+        for collector, action_type in zip(action_visual_collector, action_text):
+            id_detected = collector.get_visualize_ids()
+            for pid in id_detected:
+                id_action_dict[pid] = id_action_dict.get(pid, [])
+                id_action_dict[pid].append(action_type)
+        for mot_box in mot_boxes:
+            # mot_box is a format with [mot_id, class, score, xmin, ymin, w, h] 
+            if mot_box[0] in id_action_dict:
+                text_position = (int(mot_box[3] + mot_box[5] * 0.75),
+                                 int(mot_box[4] - 10))
+                display_text = ', '.join(id_action_dict[mot_box[0]])
+                cv2.putText(im, display_text, text_position,
+                            cv2.FONT_HERSHEY_PLAIN, text_scale, (0, 0, 255), 2)
+
+    if video_action_score:
+        cv2.putText(
+            im,
+            video_action_text + ': %.2f' % video_action_score,
+            (int(im_w / 2), int(15 * text_scale) + 5),
+            cv2.FONT_ITALIC,
+            text_scale, (0, 0, 255),
+            thickness=text_thickness)
+
+    return im
+
+
+def visualize_vehicleplate(im, results, boxes=None):
+    if isinstance(im, str):
+        im = Image.open(im)
+        im = np.ascontiguousarray(np.copy(im))
+        im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+    else:
+        im = np.ascontiguousarray(np.copy(im))
+
+    im_h, im_w = im.shape[:2]
+    text_scale = max(1.0, im.shape[0] / 400.)
+    text_thickness = 2
+
+    line_inter = im.shape[0] / 40.
+    for i, res in enumerate(results):
+        if boxes is None:
+            text_w = 3
+            text_h = 1
+        else:
+            box = boxes[i]
+            text = res
+            if text == "":
+                continue
+            text_w = int(box[2])
+            text_h = int(box[5] + box[3])
+            text_loc = (text_w, text_h)
+            cv2.putText(
+                im,
+                "LP: " + text,
+                text_loc,
+                cv2.FONT_ITALIC,
+                text_scale, (0, 255, 255),
+                thickness=text_thickness)
+    return im
+
+
+def draw_press_box_lanes(im, np_boxes, labels, threshold=0.5):
+    """
+    Args:
+        im (PIL.Image.Image): PIL image
+        np_boxes (np.ndarray): shape:[N,6], N: number of box,
+                               matix element:[class, score, x_min, y_min, x_max, y_max]
+        labels (list): labels:['class1', ..., 'classn']
+        threshold (float): threshold of box
+    Returns:
+        im (PIL.Image.Image): visualized image
+    """
+
+    if isinstance(im, str):
+        im = Image.open(im).convert('RGB')
+    elif isinstance(im, np.ndarray):
+        im = Image.fromarray(im)
+
+    draw_thickness = min(im.size) // 320
+    draw = ImageDraw.Draw(im)
+    clsid2color = {}
+    color_list = get_color_map_list(len(labels))
+
+    if np_boxes.shape[1] == 7:
+        np_boxes = np_boxes[:, 1:]
+
+    expect_boxes = (np_boxes[:, 1] > threshold) & (np_boxes[:, 0] > -1)
+    np_boxes = np_boxes[expect_boxes, :]
+
+    for dt in np_boxes:
+        clsid, bbox, score = int(dt[0]), dt[2:], dt[1]
+        if clsid not in clsid2color:
+            clsid2color[clsid] = color_list[clsid]
+        color = tuple(clsid2color[clsid])
+
+        if len(bbox) == 4:
+            xmin, ymin, xmax, ymax = bbox
+            # draw bbox
+            draw.line(
+                [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin),
+                 (xmin, ymin)],
+                width=draw_thickness,
+                fill=(0, 0, 255))
+        elif len(bbox) == 8:
+            x1, y1, x2, y2, x3, y3, x4, y4 = bbox
+            draw.line(
+                [(x1, y1), (x2, y2), (x3, y3), (x4, y4), (x1, y1)],
+                width=2,
+                fill=color)
+            xmin = min(x1, x2, x3, x4)
+            ymin = min(y1, y2, y3, y4)
+
+        # draw label
+        text = "{}".format(labels[clsid])
+        tw, th = draw.textsize(text)
+        draw.rectangle(
+            [(xmin + 1, ymax - th), (xmin + tw + 1, ymax)], fill=color)
+        draw.text((xmin + 1, ymax - th), text, fill=(0, 0, 255))
+    return im
+
+
+def visualize_vehiclepress(im, results, threshold=0.5):
+    results = np.array(results)
+    labels = ['violation']
+    im = draw_press_box_lanes(im, results, labels, threshold=threshold)
+    return im
+
+
+def visualize_lane(im, lanes):
+    if isinstance(im, str):
+        im = Image.open(im).convert('RGB')
+    elif isinstance(im, np.ndarray):
+        im = Image.fromarray(im)
+
+    draw_thickness = min(im.size) // 320
+    draw = ImageDraw.Draw(im)
+
+    if len(lanes) > 0:
+        for lane in lanes:
+            draw.line(
+                [(lane[0], lane[1]), (lane[2], lane[3])],
+                width=draw_thickness,
+                fill=(0, 0, 255))
+
+    return im
+
+
+def visualize_vehicle_retrograde(im, mot_res, vehicle_retrograde_res):
+    if isinstance(im, str):
+        im = Image.open(im).convert('RGB')
+    elif isinstance(im, np.ndarray):
+        im = Image.fromarray(im)
+
+    draw_thickness = min(im.size) // 320
+    draw = ImageDraw.Draw(im)
+
+    lane = vehicle_retrograde_res['fence_line']
+    if lane is not None:
+        draw.line(
+            [(lane[0], lane[1]), (lane[2], lane[3])],
+            width=draw_thickness,
+            fill=(0, 0, 0))
+
+    mot_id = vehicle_retrograde_res['output']
+    if mot_id is None or len(mot_id) == 0:
+        return im
+
+    if mot_res is None:
+        return im
+    np_boxes = mot_res['boxes']
+
+    if np_boxes is not None:
+        for dt in np_boxes:
+            if dt[0] not in mot_id:
+                continue
+            bbox = dt[3:]
+            if len(bbox) == 4:
+                xmin, ymin, xmax, ymax = bbox
+                # draw bbox
+                draw.line(
+                    [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin),
+                     (xmin, ymin)],
+                    width=draw_thickness,
+                    fill=(0, 255, 0))
+
+            # draw label
+            text = "retrograde"
+            tw, th = draw.textsize(text)
+            draw.rectangle(
+                [(xmax + 1, ymin - th), (xmax + tw + 1, ymin)],
+                fill=(0, 255, 0))
+            draw.text((xmax + 1, ymin - th), text, fill=(0, 255, 0))
+
     return im

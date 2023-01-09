@@ -21,7 +21,7 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 
 from ppdet.core.workspace import register
-from ..bbox_utils import iou_similarity
+from ..bbox_utils import batch_iou_similarity
 from .utils import (gather_topk_anchors, check_points_inside_bboxes,
                     compute_max_iou_anchor)
 
@@ -85,14 +85,15 @@ class TaskAlignedAssigner(nn.Layer):
 
         # negative batch
         if num_max_boxes == 0:
-            assigned_labels = paddle.full([batch_size, num_anchors], bg_index)
+            assigned_labels = paddle.full(
+                [batch_size, num_anchors], bg_index, dtype='int32')
             assigned_bboxes = paddle.zeros([batch_size, num_anchors, 4])
             assigned_scores = paddle.zeros(
                 [batch_size, num_anchors, num_classes])
             return assigned_labels, assigned_bboxes, assigned_scores
 
         # compute iou between gt and pred bbox, [B, n, L]
-        ious = iou_similarity(gt_bboxes, pred_bboxes)
+        ious = batch_iou_similarity(gt_bboxes, pred_bboxes)
         # gather pred bboxes class score
         pred_scores = pred_scores.transpose([0, 2, 1])
         batch_ind = paddle.arange(
@@ -111,9 +112,7 @@ class TaskAlignedAssigner(nn.Layer):
         # select topk largest alignment metrics pred bbox as candidates
         # for each gt, [B, n, L]
         is_in_topk = gather_topk_anchors(
-            alignment_metrics * is_in_gts,
-            self.topk,
-            topk_mask=pad_gt_mask.tile([1, 1, self.topk]).astype(paddle.bool))
+            alignment_metrics * is_in_gts, self.topk, topk_mask=pad_gt_mask)
 
         # select positive sample, [B, n, L]
         mask_positive = is_in_topk * is_in_gts * pad_gt_mask
@@ -129,9 +128,6 @@ class TaskAlignedAssigner(nn.Layer):
                                          mask_positive)
             mask_positive_sum = mask_positive.sum(axis=-2)
         assigned_gt_index = mask_positive.argmax(axis=-2)
-        assert mask_positive_sum.max() == 1, \
-            ("one anchor just assign one gt, but received not equals 1. "
-             "Received: %f" % mask_positive_sum.max().item())
 
         # assigned target
         assigned_gt_index = assigned_gt_index + batch_ind * num_max_boxes
@@ -146,7 +142,11 @@ class TaskAlignedAssigner(nn.Layer):
             gt_bboxes.reshape([-1, 4]), assigned_gt_index.flatten(), axis=0)
         assigned_bboxes = assigned_bboxes.reshape([batch_size, num_anchors, 4])
 
-        assigned_scores = F.one_hot(assigned_labels, num_classes)
+        assigned_scores = F.one_hot(assigned_labels, num_classes + 1)
+        ind = list(range(num_classes + 1))
+        ind.remove(bg_index)
+        assigned_scores = paddle.index_select(
+            assigned_scores, paddle.to_tensor(ind), axis=-1)
         # rescale alignment metrics
         alignment_metrics *= mask_positive
         max_metrics_per_instance = alignment_metrics.max(axis=-1, keepdim=True)

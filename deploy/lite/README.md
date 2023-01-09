@@ -1,8 +1,8 @@
 # Paddle-Lite端侧部署
 
-本教程将介绍基于[Paddle Lite](https://github.com/PaddlePaddle/Paddle-Lite) 在移动端部署PaddleDetection模型的详细步骤。
+[Paddle-Lite](https://github.com/PaddlePaddle/Paddle-Lite)是飞桨轻量化推理引擎，为手机、IOT端提供高效推理能力，并广泛整合跨平台硬件，为端侧部署及应用落地问题提供轻量化的部署方案。
+本目录提供了PaddleDetection中主要模型在Paddle-Lite上的端到端部署代码。用户可以通过本教程了解如何使用该部分代码，基于Paddle-Lite实现在移动端部署PaddleDetection模型。
 
-Paddle Lite是飞桨轻量化推理引擎，为手机、IOT端提供高效推理能力，并广泛整合跨平台硬件，为端侧部署及应用落地问题提供轻量化的部署方案。
 
 ## 1. 准备环境
 
@@ -12,7 +12,12 @@ Paddle Lite是飞桨轻量化推理引擎，为手机、IOT端提供高效推理
 
 ### 1.1 准备交叉编译环境
 交叉编译环境用于编译 Paddle Lite 和 PaddleDetection 的C++ demo。
-支持多种开发环境，不同开发环境的编译流程请参考对应文档，请确保安装完成Java jdk、Android NDK(R17以上)。
+支持多种开发环境，不同开发环境的编译流程请参考对应文档，请确保安装完成Java jdk、Android NDK(R17 < version < R21，其他版本以上未做测试)。
+设置NDK_ROOT命令：
+```shell
+export NDK_ROOT=[YOUR_NDK_PATH]/android-ndk-r17c
+```
+
 
 1. [Docker](https://paddle-lite.readthedocs.io/zh/latest/source_compile/compile_env.html#docker)
 2. [Linux](https://paddle-lite.readthedocs.io/zh/latest/source_compile/compile_env.html#linux)
@@ -21,17 +26,13 @@ Paddle Lite是飞桨轻量化推理引擎，为手机、IOT端提供高效推理
 ### 1.2 准备预测库
 
 预测库有两种获取方式：
-1. [**建议**]直接下载，预测库下载链接如下：
-      |平台| 架构 | 预测库下载链接|
-      |-|-|-|
-      |Android| arm7 | [inference_lite_lib](https://github.com/PaddlePaddle/Paddle-Lite/releases/download/v2.10-rc/inference_lite_lib.android.armv7.clang.c++_static.with_extra.with_cv.tar.gz) |
-      | Android | arm8 | [inference_lite_lib](https://github.com/PaddlePaddle/Paddle-Lite/releases/download/v2.10-rc/inference_lite_lib.android.armv8.clang.c++_static.with_extra.with_cv.tar.gz)  |
-      | Android | arm8(FP16) | [inference_lite_lib](https://github.com/PaddlePaddle/Paddle-Lite/releases/download/v2.10-rc/inference_lite_lib.android.armv8_clang_c++_static_with_extra_with_cv_with_fp16.tiny_publish_427e46.zip)  |
+1. [**建议**]直接从[Paddle-Lite Release](https://github.com/PaddlePaddle/Paddle-Lite/releases)中, 根据设备类型与架构选择对应的预编译库，请注意使用模型FP32/16版本需要与库相对应，库文件的说明请参考[官方文档](https://paddle-lite.readthedocs.io/zh/latest/quick_start/release_lib.html#android-toolchain-gcc)。
 
-**注意**：1. 如果是从 Paddle-Lite [官方文档](https://paddle-lite.readthedocs.io/zh/latest/quick_start/release_lib.html#android-toolchain-gcc)下载的预测库，注意选择`with_extra=ON，with_cv=ON`的下载链接。2. 目前只提供Android端demo，IOS端demo可以参考[Paddle-Lite IOS demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/master/PaddleLite-ios-demo)
+**注意**：（1） 如果是从 Paddle-Lite [官方文档](https://paddle-lite.readthedocs.io/zh/latest/quick_start/release_lib.html#android-toolchain-gcc)下载的预测库，注意选择`with_extra=ON，with_cv=ON`的下载链接。2. 目前只提供Android端demo，IOS端demo可以参考[Paddle-Lite IOS demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/master/PaddleLite-ios-demo)
+（2）PP-PicoDet部署需要Paddle Lite 2.11以上版本。
 
 
-2. 编译Paddle-Lite得到预测库，Paddle-Lite的编译方式如下：
+2. 编译Paddle-Lite得到预测库，Paddle-Lite的编译方式如下(Lite库在不断更新，如若下列命令无效，请以Lite官方repo为主)：
 ```shell
 git clone https://github.com/PaddlePaddle/Paddle-Lite.git
 cd Paddle-Lite
@@ -43,7 +44,7 @@ git checkout develop
 ./lite/tools/build_android.sh --arch=armv8 --toolchain=clang --with_cv=ON --with_extra=ON --with_arm82_fp16=ON
 ```
 
-**注意**：编译Paddle-Lite获得预测库时，需要打开`--with_cv=ON --with_extra=ON`两个选项，`--arch`表示`arm`版本，这里指定为armv8，更多编译命令介绍请参考[链接](https://paddle-lite.readthedocs.io/zh/latest/source_compile/compile_andriod.html#id2)。
+**注意**：编译Paddle-Lite获得预测库时，需要打开`--with_cv=ON --with_extra=ON`两个选项，`--arch`表示`arm`版本，这里指定为armv8，更多编译命令介绍请参考[链接](https://paddle-lite.readthedocs.io/zh/latest/source_compile/compile_options.html)。
 
 直接下载预测库并解压后，可以得到`inference_lite_lib.android.armv8.clang.c++_static.with_extra.with_cv/`文件夹，通过编译Paddle-Lite得到的预测库位于`Paddle-Lite/build.lite.android.armv8.gcc/inference_lite_lib.android.armv8/`文件夹下。
 预测库的文件目录如下：
@@ -69,23 +70,23 @@ inference_lite_lib.android.armv8/
 |   |   `-- libpaddle_lite_jni.so
 |   `-- src
 |-- demo                                     C++和Java示例代码
-|   |-- cxx                                  C++  预测库demo
+|   |-- cxx                                  C++  预测库demo, 请将本文档目录下的PaddleDetection相关代码拷贝至该文件夹下执行交叉编译。
 |   `-- java                                 Java 预测库demo
 ```
 
 ## 2 开始运行
 
-### 2.1 模型优化
+### 2.1 模型转换
 
-Paddle-Lite 提供了多种策略来自动优化原始的模型，其中包括量化、子图融合、混合调度、Kernel优选等方法，使用Paddle-Lite的`opt`工具可以自动对inference模型进行优化，目前支持两种优化方式，优化后的模型更轻量，模型运行速度更快。
+Paddle-Lite 提供了多种策略来自动优化原始的模型，其中包括量化、子图融合、混合调度、Kernel优选等方法，使用Paddle-Lite的`opt`工具可以自动对inference模型进行优化，并转换为推理所使用的文件格式。目前支持两种优化方式，优化后的模型更轻量，模型运行速度更快。
 
 **注意**：如果已经准备好了 `.nb` 结尾的模型文件，可以跳过此步骤。
 
 #### 2.1.1 安装paddle_lite_opt工具
-安装`paddle_lite_opt`工具有如下两种方法：
+安装`paddle_lite_opt`工具有如下两种方法, **请注意**，无论使用哪种方法，请尽量保证`paddle_lite_opt`工具和预测库的版本一致，以避免未知的Bug。
 1. [**建议**]pip安装paddlelite并进行转换
     ```shell
-    pip install paddlelite==2.10rc
+    pip install paddlelite
     ```
 
 2. 源码编译Paddle-Lite生成`paddle_lite_opt`工具
@@ -117,13 +118,14 @@ Paddle-Lite 提供了多种策略来自动优化原始的模型，其中包括�
 |--optimize_out_type|输出模型类型，目前支持两种类型：protobuf和naive_buffer，其中naive_buffer是一种更轻量级的序列化/反序列化实现，默认为naive_buffer|
 |--optimize_out|优化模型的输出路径|
 |--valid_targets|指定模型可执行的backend，默认为arm。目前可支持x86、arm、opencl、npu、xpu，可以同时指定多个backend(以空格分隔)，Model Optimize Tool将会自动选择最佳方式。如果需要支持华为NPU（Kirin 810/990 Soc搭载的达芬奇架构NPU），应当设置为npu, arm|
+| --enable_fp16| true/false，是否使用fp16进行推理。如果开启，需要使用对应fp16的预测库|
 
 更详细的`paddle_lite_opt`工具使用说明请参考[使用opt转化模型文档](https://paddle-lite.readthedocs.io/zh/latest/user_guides/opt/opt_bin.html)
 
 `--model_file`表示inference模型的model文件地址，`--param_file`表示inference模型的param文件地址；`optimize_out`用于指定输出文件的名称（不需要添加`.nb`的后缀）。直接在命令行中运行`paddle_lite_opt`，也可以查看所有参数及其说明。
 
 
-#### 2.1.3 转换示例
+#### 2.1.2 转换示例
 
 下面以PaddleDetection中的 `PicoDet` 模型为例，介绍使用`paddle_lite_opt`完成预训练模型到inference模型，再到Paddle-Lite优化模型的转换。
 
@@ -254,16 +256,20 @@ deploy/
 }
 ```
 
-*  `keypoint_runtime_config.json` 包含了关键点检测的超参数，请按需进行修改：
+*  `keypoint_runtime_config.json` 同时包含了目标检测和关键点检测的超参数，支持Top-Down方案的推理流程，请按需进行修改：
 ```shell
 {
+  "model_dir_det": "./model_det/",              #检测模型路径
+  "batch_size_det": 1,                          #检测模型预测时batchsize, 存在关键点模型时只能为1
+  "threshold_det": 0.5,                         #检测器输出阈值
   "model_dir_keypoint": "./model_keypoint/",    #关键点模型路径（不使用需为空字符）
   "batch_size_keypoint": 8,                     #关键点预测时batchsize
   "threshold_keypoint": 0.5,                    #关键点输出阈值
   "image_file": "demo.jpg",                     #测试图片
   "image_dir": "",                              #测试图片文件夹
-  "run_benchmark": true,                       #性能测试开关
+  "run_benchmark": true,                        #性能测试开关
   "cpu_threads": 4                              #线程数
+  "use_dark_decode": true                       #是否使用DARK解码关键点坐标
 }
 ```
 
@@ -294,7 +300,7 @@ chmod 777 main
 
 ## FAQ
 Q1：如果想更换模型怎么办，需要重新按照流程走一遍吗？  
-A1：如果已经走通了上述步骤，更换模型只需要替换 `.nb` 模型文件即可，同时要注意修改下配置文件中的 `.nb` 文件路径以及类别映射文件（如有必要）。
+A1：如果已经走通了上述步骤，更换模型只需要替换 `.nb` 模型文件及其对应模型配置文件`infer_cfg.json`，同时要注意修改下配置文件中的 `.nb` 文件路径以及类别映射文件（如有必要）。
 
 Q2：换一个图测试怎么做？  
 A2：替换 deploy 下的测试图像为你想要测试的图像，使用 ADB 再次 push 到手机上即可。

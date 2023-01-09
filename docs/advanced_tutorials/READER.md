@@ -90,7 +90,7 @@ COCO数据集目前分为COCO2014和COCO2017，主要由json文件和image文件
   │   │   ...
   ```
 
-在`source/coco.py`中定义并注册了`COCODataSet`数据集类，其继承自`DetDataSet`，并实现了parse_dataset方法，调用[COCO API](https://github.com/cocodataset/cocoapi)加载并解析COCO格式数据源`roidbs`和`cname2cid`，具体可参见`source/coco.py`源码。将其他数据集转换成COCO格式可以参考[用户数据转成COCO数据](../tutorials/PrepareDataSet.md#用户数据转成COCO数据)
+在`source/coco.py`中定义并注册了`COCODataSet`数据集类，其继承自`DetDataSet`，并实现了parse_dataset方法，调用[COCO API](https://github.com/cocodataset/cocoapi)加载并解析COCO格式数据源`roidbs`和`cname2cid`，具体可参见`source/coco.py`源码。将其他数据集转换成COCO格式可以参考[用户数据转成COCO数据](../tutorials/data/PrepareDetDataSet.md#用户数据转成COCO数据)
 
 #### 2.2Pascal VOC数据集
 该数据集目前分为VOC2007和VOC2012，主要由xml文件和image文件组成，其组织结构如下所示：
@@ -118,7 +118,7 @@ COCO数据集目前分为COCO2014和COCO2017，主要由json文件和image文件
   │   ├── ImageSets
   │       │   ...
   ```
-在`source/voc.py`中定义并注册了`VOCDataSet`数据集，它继承自`DetDataSet`基类，并重写了`parse_dataset`方法，解析VOC数据集中xml格式标注文件，更新`roidbs`和`cname2cid`。将其他数据集转换成VOC格式可以参考[用户数据转成VOC数据](../tutorials/PrepareDataSet.md#用户数据转成VOC数据)
+在`source/voc.py`中定义并注册了`VOCDataSet`数据集，它继承自`DetDataSet`基类，并重写了`parse_dataset`方法，解析VOC数据集中xml格式标注文件，更新`roidbs`和`cname2cid`。将其他数据集转换成VOC格式可以参考[用户数据转成VOC数据](../tutorials/data/PrepareDetDataSet.md#用户数据转成VOC数据)
 
 #### 2.3自定义数据集
 如果COCODataSet和VOCDataSet不能满足你的需求，可以通过自定义数据集的方式来加载你的数据集。只需要以下两步即可实现自定义数据集
@@ -259,9 +259,11 @@ Reader相关的类定义在`reader.py`, 其中定义了`BaseDataLoader`类。`Ba
 
 ### 5.配置及运行
 
-#### 5.1配置
+#### 5.1 配置
+与数据预处理相关的模块的配置文件包含所有模型公用的Dataset的配置文件，以及不同模型专用的Reader的配置文件。
 
-与数据预处理相关的模块的配置文件包含所有模型公用的Datas set的配置文件以及不同模型专用的Reader的配置文件。关于Dataset的配置文件存在于`configs/datasets`文件夹。比如COCO数据集的配置文件如下：
+##### 5.1.1 Dataset配置
+关于Dataset的配置文件存在于`configs/datasets`文件夹。比如COCO数据集的配置文件如下：
 ```
 metric: COCO # 目前支持COCO, VOC, OID， WiderFace等评估标准
 num_classes: 80 # num_classes数据集的类别数，不包含背景类
@@ -271,7 +273,7 @@ TrainDataset:
     image_dir: train2017 # 训练集的图片所在文件相对于dataset_dir的路径
     anno_path: annotations/instances_train2017.json # 训练集的标注文件相对于dataset_dir的路径
     dataset_dir: dataset/coco #数据集所在路径，相对于PaddleDetection路径
-    data_fields: ['image', 'gt_bbox', 'gt_class', 'is_crowd'] # 控制dataset输出的sample所包含的字段
+    data_fields: ['image', 'gt_bbox', 'gt_class', 'is_crowd'] # 控制dataset输出的sample所包含的字段，注意此为TrainDataset独有的且必须配置的字段
 
 EvalDataset:
   !COCODataSet
@@ -281,9 +283,16 @@ EvalDataset:
 
 TestDataset:
   !ImageFolder
-    anno_path: dataset/coco/annotations/instances_val2017.json # 验证集的标注文件所在路径，相对于PaddleDetection的路径
+    anno_path: annotations/instances_val2017.json # 标注文件所在路径，仅用于读取数据集的类别信息，支持json和txt格式
+    dataset_dir: dataset/coco # 数据集所在路径，若添加了此行，则`anno_path`路径为`dataset_dir/anno_path`，若此行不设置或去掉此行，则`anno_path`路径即为`anno_path`
 ```
 在PaddleDetection的yml配置文件中，使用`!`直接序列化模块实例(可以是函数，实例等)，上述的配置文件均使用Dataset进行了序列化。
+
+**注意：**
+请运行前自行仔细检查数据集的配置路径，在训练或验证时如果TrainDataset和EvalDataset的路径配置有误，会提示自动下载数据集。若使用自定义数据集，在推理时如果TestDataset路径配置有误，会提示使用默认COCO数据集的类别信息。
+
+
+##### 5.1.2 Reader配置
 不同模型专用的Reader定义在每一个模型的文件夹下，如yolov3的Reader配置文件定义在`configs/yolov3/_base_/yolov3_reader.yml`。一个Reader的示例配置如下：
 ```
 worker_num: 2
@@ -303,7 +312,6 @@ EvalReader:
     - Decode: {}
     ...
   batch_size: 1
-  drop_empty: false
 
 TestReader:
   inputs_def:

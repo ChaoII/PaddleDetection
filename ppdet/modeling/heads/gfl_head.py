@@ -55,7 +55,6 @@ class Integral(nn.Layer):
     This layer calculates the target location by :math: `sum{P(y_i) * y_i}`,
     P(y_i) denotes the softmax vector that represents the discrete distribution
     y_i denotes the discrete set, usually {0, 1, 2, ..., reg_max}
-
     Args:
         reg_max (int): The maximal value of the discrete set. Default: 16. You
             may want to reset it according to your new dataset or related
@@ -79,14 +78,15 @@ class Integral(nn.Layer):
                 offsets from the box center in four directions, shape (N, 4).
         """
         x = F.softmax(x.reshape([-1, self.reg_max + 1]), axis=1)
-        x = F.linear(x, self.project).reshape([-1, 4])
+        x = F.linear(x, self.project)
+        if self.training:
+            x = x.reshape([-1, 4])
         return x
 
 
 @register
 class DGQP(nn.Layer):
     """Distribution-Guided Quality Predictor of GFocal head
-
     Args:
         reg_topk (int): top-k statistics of distribution to guide LQE
         reg_channels (int): hidden layer unit to generate LQE
@@ -139,7 +139,7 @@ class DGQP(nn.Layer):
                     axis=2, keepdim=True)], axis=2)
         else:
             stat = prob_topk
-        y = F.relu(self.reg_conv1(stat.reshape([N, -1, H, W])))
+        y = F.relu(self.reg_conv1(stat.reshape([N, 4 * self.total_dim, H, W])))
         y = F.sigmoid(self.reg_conv2(y))
         return y
 
@@ -258,7 +258,7 @@ class GFLHead(nn.Layer):
                 center_points = paddle.stack([x, y], axis=-1)
                 cls_score = cls_score.reshape([b, -1, self.cls_out_channels])
                 bbox_pred = self.distribution_project(bbox_pred) * stride
-                bbox_pred = bbox_pred.reshape([b, cell_h * cell_w, 4])
+                bbox_pred = bbox_pred.reshape([-1, cell_h * cell_w, 4])
 
                 # NOTE: If keep_ratio=False and image shape value that
                 # multiples of 32, distance2bbox not set max_shapes parameter
@@ -311,8 +311,9 @@ class GFLHead(nn.Layer):
                                                    num_level_anchors)
         num_total_pos = sum(gt_meta['pos_num'])
         try:
-            num_total_pos = paddle.distributed.all_reduce(num_total_pos.clone(
-            )) / paddle.distributed.get_world_size()
+            paddle.distributed.all_reduce(num_total_pos)
+            num_total_pos = paddle.clip(
+                num_total_pos / paddle.distributed.get_world_size(), min=1)
         except:
             num_total_pos = max(num_total_pos, 1)
 
@@ -386,7 +387,7 @@ class GFLHead(nn.Layer):
 
         avg_factor = sum(avg_factor)
         try:
-            avg_factor = paddle.distributed.all_reduce(avg_factor.clone())
+            paddle.distributed.all_reduce(avg_factor)
             avg_factor = paddle.clip(
                 avg_factor / paddle.distributed.get_world_size(), min=1)
         except:

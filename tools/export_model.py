@@ -90,9 +90,6 @@ def main():
     paddle.set_device("cpu")
     FLAGS = parse_args()
     cfg = load_config(FLAGS.config)
-    # TODO: to be refined in the future
-    if 'norm_type' in cfg and cfg['norm_type'] == 'sync_bn':
-        FLAGS.opt['norm_type'] = 'bn'
     merge_config(FLAGS.opt)
 
     if FLAGS.slim_config:
@@ -101,6 +98,8 @@ def main():
     # FIXME: Temporarily solve the priority problem of FLAGS.opt
     merge_config(FLAGS.opt)
     check_config(cfg)
+    if 'use_gpu' not in cfg:
+        cfg.use_gpu = False
     check_gpu(cfg.use_gpu)
     check_version()
 

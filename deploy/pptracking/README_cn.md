@@ -10,7 +10,7 @@ PP-Tracking支持单镜头跟踪(MOT)和跨镜头跟踪(MTMCT)两种模式，针
 </div>
 
 <div width="1000" align="center">
-  <img src="../../docs/images/pptracking-demo.gif"/>
+  <img src="https://user-images.githubusercontent.com/22989727/205546999-f847183d-73e5-4abe-9896-ce6a245efc79.gif"/>
   <br>
   视频来源：VisDrone和BDD100K公开数据集</div>
 </div>
@@ -36,7 +36,7 @@ PP-Tracking 提供了简洁的GUI可视化界面，教程请参考[PP-Tracking�
 PP-Tracking 支持单镜头跟踪(MOT)和跨镜头跟踪(MTMCT)两种模式。
 - 单镜头跟踪同时支持**FairMOT**和**DeepSORT**两种多目标跟踪算法，跨镜头跟踪只支持**DeepSORT**算法。
 - 单镜头跟踪的功能包括行人跟踪、车辆跟踪、多类别跟踪、小目标跟踪以及流量统计，模型主要是基于FairMOT进行优化，实现了实时跟踪的效果，同时基于不同应用场景提供了针对性的预训练模型。
-- DeepSORT算法方案(包括跨镜头跟踪用到的DeepSORT)，选用的检测器是PaddleDetection自研的高性能检测模型[PP-YOLOv2](../../ppyolo/)和轻量级特色检测模型[PP-PicoDet](../../picodet/)，选用的ReID模型是PaddleClas自研的超轻量骨干网络模型[PP-LCNet](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.3/docs/zh_CN/models/PP-LCNet.md)
+- DeepSORT算法方案(包括跨镜头跟踪用到的DeepSORT)，选用的检测器是PaddleDetection自研的高性能检测模型[PP-YOLOv2](../../configs/ppyolo/)和轻量级特色检测模型[PP-PicoDet](../../configs/picodet/)，选用的ReID模型是PaddleClas自研的超轻量骨干网络模型[PP-LCNet](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.3/docs/zh_CN/models/PP-LCNet.md)
 
 PP-Tracking中提供的多场景预训练模型以及导出后的预测部署模型如下：
 

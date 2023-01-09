@@ -29,7 +29,8 @@ from . import reid
 from . import mot
 from . import transformers
 from . import assigners
-from . import coders
+from . import rbox_utils
+from . import ssod_utils
 
 from .ops import *
 from .backbones import *
@@ -44,4 +45,5 @@ from .reid import *
 from .mot import *
 from .transformers import *
 from .assigners import *
-from .coders import *
+from .rbox_utils import *
+from .ssod_utils import *

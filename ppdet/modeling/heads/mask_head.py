@@ -20,6 +20,7 @@ from paddle.nn.initializer import KaimingNormal
 from ppdet.core.workspace import register, create
 from ppdet.modeling.layers import ConvNormLayer
 from .roi_extractor import RoIAlign
+from ..cls_utils import _get_class_default_kwargs
 
 
 @register
@@ -79,7 +80,7 @@ class MaskFeat(nn.Layer):
         mask_conv.add_sublayer(
             'conv5_mask',
             nn.Conv2DTranspose(
-                in_channels=self.in_channel,
+                in_channels=self.out_channel if num_convs > 0 else self.in_channel,
                 out_channels=self.out_channel,
                 kernel_size=2,
                 stride=2,
@@ -120,7 +121,7 @@ class MaskHead(nn.Layer):
 
     def __init__(self,
                  head,
-                 roi_extractor=RoIAlign().__dict__,
+                 roi_extractor=_get_class_default_kwargs(RoIAlign),
                  mask_assigner='MaskAssigner',
                  num_classes=80,
                  share_bbox_feat=False,
@@ -209,7 +210,7 @@ class MaskHead(nn.Layer):
         scale_factor (Tensor): The scale factor from origin size to input size
         """
         if not self.export_onnx and rois.shape[0] == 0:
-            mask_out = paddle.full([1, 1, 1, 1], -1)
+            mask_out = paddle.full([1, 1, 1], -1)
         else:
             bbox = [rois[:, 2:]]
             labels = rois[:, 0].cast('int32')
@@ -221,7 +222,7 @@ class MaskHead(nn.Layer):
             mask_feat = self.head(rois_feat)
             mask_logit = self.mask_fcn_logits(mask_feat)
             if self.num_classes == 1:
-                mask_out = F.sigmoid(mask_logit)
+                mask_out = F.sigmoid(mask_logit)[:, 0, :, :]
             else:
                 num_masks = paddle.shape(mask_logit)[0]
                 index = paddle.arange(num_masks).cast('int32')

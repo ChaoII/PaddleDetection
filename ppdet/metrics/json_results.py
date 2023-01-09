@@ -65,6 +65,14 @@ def get_det_poly_res(bboxes, bbox_nums, image_id, label_to_cat_id_map, bias=0):
     return det_res
 
 
+def strip_mask(mask):
+    row = mask[0, 0, :]
+    col = mask[0, :, 0]
+    im_h = len(col) - np.count_nonzero(col == -1)
+    im_w = len(row) - np.count_nonzero(row == -1)
+    return mask[:, :im_h, :im_w]
+
+
 def get_seg_res(masks, bboxes, mask_nums, image_id, label_to_cat_id_map):
     import pycocotools.mask as mask_util
     seg_res = []
@@ -72,8 +80,10 @@ def get_seg_res(masks, bboxes, mask_nums, image_id, label_to_cat_id_map):
     for i in range(len(mask_nums)):
         cur_image_id = int(image_id[i][0])
         det_nums = mask_nums[i]
+        mask_i = masks[k:k + det_nums]
+        mask_i = strip_mask(mask_i)
         for j in range(det_nums):
-            mask = masks[k].astype(np.uint8)
+            mask = mask_i[j].astype(np.uint8)
             score = float(bboxes[k][1])
             label = int(bboxes[k][0])
             k = k + 1
@@ -146,4 +156,20 @@ def get_keypoint_res(results, im_id):
             ann['area'] = (x1 - x0) * (y1 - y0)
             ann['bbox'] = [x0, y0, x1 - x0, y1 - y0]
             anns.append(ann)
+    return anns
+
+
+def get_pose3d_res(results, im_id):
+    anns = []
+    preds = results['pose3d']
+    for idx in range(im_id.shape[0]):
+        image_id = im_id[idx].item()
+        pose3d = preds[idx]
+        ann = {
+            'image_id': image_id,
+            'category_id': 1,  # XXX hard code
+            'pose3d': pose3d.tolist(),
+            'score': float(1.)
+        }
+        anns.append(ann)
     return anns
